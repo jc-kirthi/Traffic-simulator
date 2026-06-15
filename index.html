@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <title>Bengaluru Traffic Junction Monitor - Web Portal</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CheerpJ 3.0 Loader -->
-    <script src="https://cjrt3f.leaningtech.com/3.0/loader.js"></script>
+    <!-- CheerpJ 4.3 Loader -->
+    <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
     <style>
         body {
             margin: 0;
@@ -74,19 +74,23 @@
     <div id="container"></div>
 
     <script>
-        // Initialize CheerpJ
-        cheerpjInit().then(() => {
-            // Hide loading spinner
+        (async function () {
+            // 1. Initialize CheerpJ and await ready state
+            await cheerpjInit();
+
+            // 2. Fade out loading spinner
             const loader = document.getElementById("loader");
             if (loader) {
                 loader.style.opacity = "0";
                 setTimeout(() => loader.style.display = "none", 500);
             }
-            // Create virtual canvas display
+
+            // 3. Create virtual display inside container
             cheerpjCreateDisplay(980, 780, document.getElementById("container"));
-            // Run Java class with the jar in /app/
-            cheerpjRunMain("TrafficAnalyzerGUI", "/app/TrafficSimulator.jar");
-        });
+
+            // 4. Run main class from compiled jar archive
+            await cheerpjRunMain("TrafficAnalyzerGUI", "/app/TrafficSimulator.jar");
+        })();
     </script>
 </body>
 </html>
