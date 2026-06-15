@@ -31,11 +31,61 @@ public class JunctionMonitor implements Runnable {
                 break;
             }
 
-            // 1. Generate base reading
-            SensorReading baseReading = generateReadingForJunction();
-            int vehicles = baseReading.getVehicleCount();
-            int speed = baseReading.getAverageSpeed();
-            int aqi = baseReading.getAqi();
+            // 1. Generate reading: first step is base, subsequent steps drift gradually
+            int vehicles, speed, aqi;
+            if (history.isEmpty()) {
+                SensorReading baseReading = generateReadingForJunction();
+                vehicles = baseReading.getVehicleCount();
+                speed = baseReading.getAverageSpeed();
+                aqi = baseReading.getAqi();
+            } else {
+                SensorReading lastReading = history.get(history.size() - 1);
+                int prevVehicles = lastReading.getVehicleCount();
+                int prevSpeed = lastReading.getAverageSpeed();
+                int prevAqi = lastReading.getAqi();
+
+                // Small incremental variations to look like gradual traffic progression
+                int vDrift = random.nextInt(15) - 6; // -6 to +8 vehicles
+                int sDrift = random.nextInt(9) - 4;  // -4 to +4 km/h
+                int aDrift = random.nextInt(19) - 8; // -8 to +10 AQI
+
+                int rawV = prevVehicles + vDrift;
+                int rawS = prevSpeed + sDrift;
+                int rawA = prevAqi + aDrift;
+
+                // Clamp to realistic bounds based on junction profile
+                switch (junctionName) {
+                    case "Silk Board":
+                        vehicles = Math.max(50, Math.min(120, rawV));
+                        speed = Math.max(5, Math.min(30, rawS));
+                        aqi = Math.max(80, Math.min(200, rawA));
+                        break;
+                    case "KR Puram":
+                        vehicles = Math.max(45, Math.min(115, rawV));
+                        speed = Math.max(8, Math.min(35, rawS));
+                        aqi = Math.max(90, Math.min(230, rawA));
+                        break;
+                    case "Hebbal":
+                        vehicles = Math.max(30, Math.min(90, rawV));
+                        speed = Math.max(20, Math.min(60, rawS));
+                        aqi = Math.max(60, Math.min(160, rawA));
+                        break;
+                    case "Marathahalli":
+                        vehicles = Math.max(40, Math.min(100, rawV));
+                        speed = Math.max(12, Math.min(45, rawS));
+                        aqi = Math.max(100, Math.min(250, rawA));
+                        break;
+                    case "Electronic City":
+                        vehicles = Math.max(15, Math.min(70, rawV));
+                        speed = Math.max(35, Math.min(75, rawS));
+                        aqi = Math.max(30, Math.min(110, rawA));
+                        break;
+                    default:
+                        vehicles = Math.max(20, Math.min(100, rawV));
+                        speed = Math.max(10, Math.min(60, rawS));
+                        aqi = Math.max(50, Math.min(180, rawA));
+                }
+            }
 
             // 2. Retrieve global weather and modify reading variables
             String weather = gui.getWeatherCondition();
