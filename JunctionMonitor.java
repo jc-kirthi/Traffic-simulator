@@ -1,10 +1,13 @@
 import javax.swing.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class JunctionMonitor implements Runnable {
     private final String junctionName;
     private final TrafficAnalyzerGUI gui;
     private final Random random = new Random();
+    private final List<SensorReading> history = new ArrayList<>();
 
     public JunctionMonitor(String junctionName, TrafficAnalyzerGUI gui) {
         this.junctionName = junctionName;
@@ -21,18 +24,70 @@ public class JunctionMonitor implements Runnable {
 
         for (int i = 1; i <= 5; i++) {
             try {
-                // Sleep to simulate time between sensor readings and allow interleaving
-                Thread.sleep(800 + random.nextInt(700)); // 800ms to 1500ms
+                // Slowed down simulation loop to help audience follow the live analytics
+                Thread.sleep(2500 + random.nextInt(1500)); // 2500ms to 4000ms
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             }
 
-            // Generate realistic readings based on specific junction profiles
-            SensorReading reading = generateReadingForJunction();
+            // 1. Generate base reading
+            SensorReading baseReading = generateReadingForJunction();
+            int vehicles = baseReading.getVehicleCount();
+            int speed = baseReading.getAverageSpeed();
+            int aqi = baseReading.getAqi();
+
+            // 2. Retrieve global weather and modify reading variables
+            String weather = gui.getWeatherCondition();
+            if ("Heavy Rain".equals(weather)) {
+                speed = Math.max(5, (int) (speed * 0.60)); // 40% Speed Reduction
+            } else if ("Dense Fog".equals(weather)) {
+                speed = Math.max(5, (int) (speed * 0.50)); // 50% Speed Reduction
+                aqi = (int) (aqi * 1.30); // 30% increase in AQI (smog trapping)
+            }
+
+            // 3. Simulating emergency vehicle spawn (12% chance)
+            String emergency = "None";
+            if (random.nextInt(100) < 12) {
+                String[] emergencyTypes = {"Ambulance", "Fire Truck", "Police Vehicle"};
+                emergency = emergencyTypes[random.nextInt(emergencyTypes.length)];
+                vehicles = Math.min(120, vehicles + 8); // Emergency vehicle creates sudden bunching
+                speed = Math.max(5, speed - 5);
+            }
+
+            // Construct final reading
+            SensorReading reading = new SensorReading(vehicles, speed, aqi, emergency);
+
+            // 4. Calculate prediction trend based on history
+            String predictedState;
+            if (!history.isEmpty()) {
+                SensorReading lastReading = history.get(history.size() - 1);
+                int delta = reading.getVehicleCount() - lastReading.getVehicleCount();
+                int projectedVehicles = reading.getVehicleCount() + 5 * delta; // projection for 15 mins (5 loops ahead)
+                
+                if (projectedVehicles > 100) {
+                    predictedState = "Severe Congestion in 15 mins";
+                } else if (projectedVehicles > 80) {
+                    predictedState = "Heavy Congestion in 15 mins";
+                } else if (projectedVehicles > 50) {
+                    predictedState = "Moderate Traffic in 15 mins";
+                } else {
+                    predictedState = "Normal Traffic in 15 mins";
+                }
+            } else {
+                // First reading: guess based on current vehicle count
+                if (vehicles > 85) {
+                    predictedState = "Heavy Congestion in 15 mins";
+                } else if (vehicles > 55) {
+                    predictedState = "Moderate Traffic in 15 mins";
+                } else {
+                    predictedState = "Normal Traffic in 15 mins";
+                }
+            }
+            history.add(reading);
 
             // Run anomaly detection pipeline (AI logic)
-            AnomalyResult result = AnomalyDetector.analyze(junctionName, reading);
+            AnomalyResult result = AnomalyDetector.analyze(junctionName, reading, predictedState);
 
             // Log output to stdout in requested format
             printLogToConsole(reading, result);
@@ -64,31 +119,26 @@ public class JunctionMonitor implements Runnable {
 
         switch (junctionName) {
             case "Silk Board":
-                // Heavy traffic, slow speed, average air quality
                 vehicles = 60 + random.nextInt(55); // 60 to 115
                 speed = 5 + random.nextInt(20);     // 5 to 24 km/h
                 aqi = 80 + random.nextInt(100);    // 80 to 179
                 break;
             case "KR Puram":
-                // Moderate-high traffic, slow-medium speed, poor air quality
                 vehicles = 50 + random.nextInt(55); // 50 to 105
                 speed = 10 + random.nextInt(25);    // 10 to 34 km/h
                 aqi = 100 + random.nextInt(120);   // 100 to 219
                 break;
             case "Hebbal":
-                // Moderate traffic, medium-fast speed, average air quality
                 vehicles = 40 + random.nextInt(45); // 40 to 85
                 speed = 25 + random.nextInt(35);    // 25 to 59 km/h
                 aqi = 70 + random.nextInt(90);     // 70 to 159
                 break;
             case "Marathahalli":
-                // High air quality issues, moderate traffic, medium speed
                 vehicles = 45 + random.nextInt(50); // 45 to 95
                 speed = 15 + random.nextInt(30);    // 15 to 44 km/h
                 aqi = 120 + random.nextInt(130);   // 120 to 249
                 break;
             case "Electronic City":
-                // Generally normal traffic, high speed, clean air
                 vehicles = 20 + random.nextInt(45); // 20 to 65
                 speed = 40 + random.nextInt(35);    // 40 to 74 km/h
                 aqi = 40 + random.nextInt(70);     // 40 to 109
@@ -99,7 +149,8 @@ public class JunctionMonitor implements Runnable {
                 aqi = 50 + random.nextInt(100);
         }
 
-        return new SensorReading(vehicles, speed, aqi);
+        // Return a raw reading with "None" emergency, which will be updated in run()
+        return new SensorReading(vehicles, speed, aqi, "None");
     }
 
     private void printLogToConsole(SensorReading reading, AnomalyResult result) {
